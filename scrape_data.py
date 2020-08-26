@@ -32,98 +32,35 @@ def timetable_dict_to_list(timetable):
     return times
 
 
-# TODO: simplify methods below, by merging them somehow into one
-def timetable_normal(hours_list, minutes_list, type_of_bus, thick_hour=None, thick_minutes=None):
+def get_timetable_http_table(hours_list, minutes_list, type_of_bus, day, thick_hour=None, thick_minutes=None):
+    next_day_flag = False
     timetable = {}
-    if thick_hour is not None:
-        next_day_flag = False
-        for i, hour in enumerate(hours_list):
-            tmp_hour = int(hour.text.strip())
-            minutes = minutes_list[i * type_of_bus].text.strip()
-
-            if tmp_hour == 22:
-                timetable[tmp_hour] = minutes
-                timetable[thick_hour] = thick_minutes[0].text.strip()
-                next_day_flag = True
+    for i, hour in enumerate(hours_list):
+        hour = int(hour.text.strip())
+        minutes = minutes_list[i * type_of_bus + day].text.strip()
+        if hour == 22 and thick_hour:
+            timetable[hour] = minutes
+            timetable[thick_hour] = thick_minutes[day].text.strip()
+            next_day_flag = True
+        else:
+            if not next_day_flag:
+                timetable[hour] = minutes
             else:
-                if not next_day_flag:
-                    timetable[tmp_hour] = minutes
-                else:
-                    timetable[tmp_hour + 24] = minutes
-    else:
-        for i, hour in enumerate(hours_list):
-            tmp_hour = int(hour.text.strip())
-            minutes = minutes_list[i * type_of_bus].text.strip()
-            timetable[tmp_hour] = minutes
+                timetable[hour + 24] = minutes
     return timetable_dict_to_list(timetable)
 
 
-def timetable_saturday(hours_list, minutes_list, type_of_bus, thick_hour=None, thick_minutes=None):
-    timetable = timetable_normal(hours_list, minutes_list, type_of_bus, thick_hour, thick_minutes)
-    timetable_sat = {}
-    if thick_hour is not None:
-        flag = False
-        for i, hour in enumerate(hours_list):
-            tmp_hour = int(hour.text.strip())
-            minutes = minutes_list[i * type_of_bus + 1].text.strip()
-
-            if tmp_hour == 22:
-                timetable_sat[tmp_hour] = minutes
-                timetable_sat[thick_hour] = thick_minutes[1].text.strip()
-                flag = True
-            else:
-                if not flag:
-                    timetable_sat[tmp_hour] = minutes
-                else:
-                    timetable_sat[tmp_hour + 24] = minutes
-    else:
-        for i, hour in enumerate(hours_list):
-            tmp_hour = int(hour.text.strip())
-            minutes = minutes_list[i * type_of_bus + 1].text.strip()
-            timetable_sat[tmp_hour] = minutes
-    return timetable, timetable_dict_to_list(timetable_sat)
-
-
-def timetable_sunday(hours_list, minutes_list, type_of_bus, thick_hour=None, thick_minutes=None):
-    timetable, timetable_sat = timetable_saturday(hours_list, minutes_list, type_of_bus, thick_hour, thick_minutes)
-    timetable_sun = {}
-    if thick_hour is not None:
-        flag = False
-        for i, hour in enumerate(hours_list):
-            tmp_hour = int(hour.text.strip())
-            minutes = minutes_list[i * type_of_bus + 2].text.strip()
-
-            if tmp_hour == 22:
-                timetable_sun[tmp_hour] = minutes
-                timetable_sun[thick_hour] = thick_minutes[2].text.strip()
-                flag = True
-            else:
-                if not flag:
-                    timetable_sun[tmp_hour] = minutes
-                else:
-                    timetable_sun[tmp_hour + 24] = minutes
-    else:
-        for i, hour in enumerate(hours_list):
-            tmp_hour = int(hour.text.strip())
-            minutes = minutes_list[i * type_of_bus + 2].text.strip()
-            timetable_sun[tmp_hour] = minutes
-    return timetable, timetable_sat, timetable_dict_to_list(timetable_sun)
-
-
 def generate_timetable(hours_list, minutes_list, thick_hour=None, thick_minutes=None):
-    # type_of_bus: tells if bus drives only on weekdays or on weekkdays + saturdays or whole week
+    # type_of_bus: tells if bus drives only on weekdays or on weekdays + saturdays or whole week
     # based on number of cols in html table - len of minutes_list and len of hours_list
     type_of_bus = int(len(minutes_list) / len(hours_list))
-
-    if type_of_bus == 1:
-        return timetable_normal(hours_list, minutes_list, type_of_bus, thick_hour, thick_minutes)
-    elif type_of_bus == 2:
-        return timetable_saturday(hours_list, minutes_list, type_of_bus, thick_hour, thick_minutes)
-    elif type_of_bus == 3:
-        return timetable_sunday(hours_list, minutes_list, type_of_bus, thick_hour, thick_minutes)
+    times = []
+    for i in range(type_of_bus):
+        times.append(get_timetable_http_table(hours_list, minutes_list, type_of_bus, i, thick_hour, thick_minutes))
+    return times
 
 
-def download_timetables(a, stop, stops_times_dict=None):
+def download_timetables(a, stop, date, stops_times_dict=None):
     """
     :param a: <a> param of previous bus stop
     :type a: str
@@ -140,7 +77,7 @@ def download_timetables(a, stop, stops_times_dict=None):
     link = a['href']
     response = requests.get("http://rozklady.mpk.krakow.pl{}".format(link), headers=headers)
     soup = BeautifulSoup(response.text, parser)
-    next_link = a.find_next('a', href=re.compile("lang=PL&rozklad=20200823&linia="))
+    next_link = a.find_next('a', href=re.compile("lang=PL&rozklad={}&linia=".format(date)))
 
     if next_link is None:
         return stops_times_dict
@@ -169,13 +106,13 @@ def download_timetables(a, stop, stops_times_dict=None):
 
     if stop in stops_times_dict.keys():
         stop = stop + " 2"
-    stops_times_dict[stop] = list(hours)
+    stops_times_dict[stop] = hours
 
-    return download_timetables(next_link, next_stop, stops_times_dict)
+    return download_timetables(next_link, next_stop, date, stops_times_dict)
 
 
 def progress_bar(current_line, total):
-    percent = ("{0:." + str(1) + "f}").format(100 * (current_line / float(total)))
+    percent = ("{0:.1f}").format(100 * (current_line / float(total)))
     filled_length = int(100 * current_line // total)
     bar = "$" * filled_length + '-' * (100 - filled_length)
     print(f'\r Progress: |{bar}| {percent} % Complete', end='\r')
@@ -183,18 +120,17 @@ def progress_bar(current_line, total):
         print()
 
 
-def main(lines_arg):
+def main(lines_arg, date):
     # TODO: automate date in link
 
     progress_bar(0, len(lines_arg))
 
-    main_link = "http://rozklady.mpk.krakow.pl/?lang=PL&rozklad=20200823&linia="
+    main_link = "http://rozklady.mpk.krakow.pl/?lang=PL&rozklad={}&linia=".format(date)
     timetable = {}
     for i, line in enumerate(lines_arg):
-        link = line["href"]
         line = line.text.strip()
         # Get each bus line web-page
-        response = requests.get(main_link + "{}".format(link), headers=headers)
+        response = requests.get(main_link + "{}".format(line), headers=headers)
         soup = BeautifulSoup(response.text, parser)
         number_of_bus_routes = len(soup.find_all('table', attrs={'style': ' vertical-align: top; '})[0].find_all('a'))
         for route in range(1, number_of_bus_routes + 1):
@@ -203,11 +139,11 @@ def main(lines_arg):
             soup = BeautifulSoup(response.text, parser)
 
             # Get first bus stop
-            first_link = soup.find('a', href=re.compile(re.escape(r"/?lang=PL&rozklad=20200823&linia={}__{}".format(line, route))))
+            first_link = soup.find('a', href=re.compile(re.escape(r"/?lang=PL&rozklad={}&linia={}__{}".format(date, line, route))))
             first_stop = first_link.find('span').contents[0].strip()
 
             # Get next stops recursively
-            timetable["{}_{}".format(line, route)] = download_timetables(first_link, first_stop)
+            timetable["{}_{}".format(line, route)] = download_timetables(first_link, first_stop, date)
         progress_bar(i, len(lines_arg))
     with open("lines_stops_times_dict.txt", "a") as file:
         file.write(json.dumps(timetable))
@@ -218,4 +154,5 @@ if __name__ == "__main__":
     response = requests.get("http://rozklady.mpk.krakow.pl", headers=headers)
     soup = BeautifulSoup(response.text, parser)
     lines = soup.find_all('a', attrs={'class': ["linia", "liniaZ", "liniaO", "liniaN"]})
-    main(lines)
+    date = lines[0]["href"].split('&')[1].split('=')[1]
+    main(lines, date)
