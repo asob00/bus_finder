@@ -1,8 +1,15 @@
 import json
+import scrape_data
 
-with open('lines_stops_times_dict', 'r') as timetable_dict:
-    json_timetable = timetable_dict.read()
-    timetable = json.loads(json_timetable)
+try:
+    with open('lines_stops_times_dict', 'r') as timetable_dict:
+        json_timetable = timetable_dict.read()
+        timetable = json.loads(json_timetable)
+except FileNotFoundError:
+    scrape_data.main()
+    with open('lines_stops_times_dict', 'r') as timetable_dict:
+        json_timetable = timetable_dict.read()
+        timetable = json.loads(json_timetable)
 
 
 def generate_graph(timetable: dict) -> dict:
@@ -10,33 +17,30 @@ def generate_graph(timetable: dict) -> dict:
 
     Parameters
     ----------
-    timetable : dict, required
-        Dictionary containing, data about each bus, stop and bus timetables in Kraków
+    :type timetable : dict, required
+        Dictionary containing, data about each bus, stop and bus timetables in Krakow
 
     Returns:
     --------
-    graph : dict
+    :return graph : dict
         Dictionary reflecting bus connections (routes)
     """
 
-
     graph = {}
     for line, stops_times_dict in timetable.items():
-        for idx, stop in enumerate(stops_times_dict.keys(), start=1):
+        for idx, stop in enumerate(list(stops_times_dict.keys())[:-1], start=1):
 
-            stops_times_dict_len = len(stops_times_dict.keys())
-            if idx < stops_times_dict_len:
-                next_stop = list(stops_times_dict.keys())[idx]
+            next_stop = list(stops_times_dict.keys())[idx]
 
-            if stop not in graph.keys() and idx < stops_times_dict_len:
+            if stop not in graph.keys():
                 graph[stop] = {next_stop: [line]}
 
-            elif idx < stops_times_dict_len:
-                curently_in_graph = graph[stop]
+            else:
+                currently_in_graph = graph[stop]
 
-                if next_stop in curently_in_graph.keys():
-                    curently_in_graph[next_stop].append(line)
-                    graph[stop] = curently_in_graph
+                if next_stop in currently_in_graph.keys():
+                    currently_in_graph[next_stop].append(line)
+                    graph[stop] = currently_in_graph
 
                 else:
                     graph[stop][next_stop] = [line]

@@ -1,11 +1,11 @@
 """Data scraper
 
-This script downloads all useful data from MPK Kraków website:
+This script downloads all useful data from MPK Krakow website:
 http://rozklady.mpk.krakow.pl
 And saves it into file "lines_stops_times_dict" as dictionary,
 further used to create buss connections graph used in BusFinder app
 
-This tool requiresc that 'bs4' is installed within the Python
+This tool requires that 'bs4' is installed within the Python
 environment you are running this script in.
 
 This file can also be imported as a module and contains functions:
@@ -25,7 +25,7 @@ import json
 import re
 from bs4 import BeautifulSoup
 
-headers = {'Host': 'rozklady.mpk.krakow.pl',
+HEADERS = {'Host': 'rozklady.mpk.krakow.pl',
            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:76.0) Gecko/20100101 Firefox/76.0',
            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
            'Accept-Language': 'en-US,en;q=0.5',
@@ -35,11 +35,11 @@ headers = {'Host': 'rozklady.mpk.krakow.pl',
            'Cookie': 'ROZKLADY_JEZYK=PL; ROZKLADY_WIDTH=2000; ROZKLADY_WIZYTA=21; ROZKLADY_OSTATNIA=1591350104; '
                      'ROZKLADY_AB=0;',
            'Cache-Control': 'max-age=0'}
-unicode = "utf-8"
-parser = 'html.parser'
+UNICODE = "utf-8"
+PARSER = 'html.parser'
 
 
-def timetable_dict_to_list(timetable):
+def timetable_dict_to_list(timetable: dict) -> list:
     """Converts timetable in form of dict into list in specified below format
 
     :type timetable: dict
@@ -58,7 +58,12 @@ def timetable_dict_to_list(timetable):
     return times
 
 
-def get_timetable_http_table(hours_list, minutes_list, type_of_bus, day, thick_hour=None, thick_minutes=None):
+def get_timetable_http_table(hours_list: list,
+                             minutes_list: list,
+                             type_of_bus: int,
+                             day: int,
+                             thick_hour=None,
+                             thick_minutes=None) -> list:
     """
     :type hours_list: list
     :param hours_list: list of <td> parameters in table containing hours
@@ -85,7 +90,6 @@ def get_timetable_http_table(hours_list, minutes_list, type_of_bus, day, thick_h
     timetable = {}
 
     for i, hour in enumerate(hours_list):
-
         hour = int(hour.text.strip())
         minutes = minutes_list[i * type_of_bus + day].text.strip()
 
@@ -102,7 +106,10 @@ def get_timetable_http_table(hours_list, minutes_list, type_of_bus, day, thick_h
     return timetable_dict_to_list(timetable)
 
 
-def generate_timetable(hours_list, minutes_list, thick_hour=None, thick_minutes=None):
+def generate_timetable(hours_list: list,
+                       minutes_list: list,
+                       thick_hour=None,
+                       thick_minutes=None) -> list:
     """
         :type hours_list: list
         :param hours_list: list of <td> parameters in table containing hours
@@ -125,18 +132,30 @@ def generate_timetable(hours_list, minutes_list, thick_hour=None, thick_minutes=
     times = []
 
     for i in range(type_of_bus):
-        times.append(get_timetable_http_table(hours_list, minutes_list, type_of_bus, i, thick_hour, thick_minutes))
-
+        times.append(get_timetable_http_table(hours_list,
+                                              minutes_list,
+                                              type_of_bus,
+                                              i,
+                                              thick_hour,
+                                              thick_minutes))
+    for i in range(3-type_of_bus):
+        times.append([])
     return times
 
 
-def download_timetables(a, stop, date, stops_times_dict=None):
+def download_timetables(a: str,
+                        stop: str,
+                        date: str,
+                        stops_times_dict=None) -> dict:
     """
     :type a: str
     :param a: <a> param of previous bus stop
 
     :type stop: str
     :param stop: current bus stop
+
+    :type date: str
+    :param date: tate required in link to web page
 
     :type stops_times_dict: dict
     :param stops_times_dict: dictionary containing line data
@@ -148,9 +167,9 @@ def download_timetables(a, stop, date, stops_times_dict=None):
         stops_times_dict = {}
 
     link = a['href']
-    response = requests.get("http://rozklady.mpk.krakow.pl{}".format(link), headers=headers)
-    soup = BeautifulSoup(response.text, parser)
-    next_link = a.find_next('a', href=re.compile("lang=PL&rozklad={}&linia=".format(date)))
+    response = requests.get(f"http://rozklady.mpk.krakow.pl{link}", headers=HEADERS)
+    soup = BeautifulSoup(response.text, PARSER)
+    next_link = a.find_next('a', href=re.compile(f"lang=PL&rozklad={date}&linia="))
 
     if next_link is None:
         last_stop = a.find_next('td', style=re.compile("text-align: right;"))
@@ -190,9 +209,9 @@ def download_timetables(a, stop, date, stops_times_dict=None):
     return download_timetables(next_link, next_stop, date, stops_times_dict)
 
 
-def progress_bar(current_line, total):
+def progress_bar(current_line: int, total: int):
 
-    percent = ("{0:.1f}").format(100 * (current_line / float(total)))
+    percent = "{0:.1f}".format(100 * (current_line / float(total)))
     filled_length = int(100 * current_line // total)
     bar = "$" * filled_length + '-' * (100 - filled_length)
 
@@ -203,38 +222,41 @@ def progress_bar(current_line, total):
 
 
 def main():
-
-    response = requests.get("http://rozklady.mpk.krakow.pl", headers=headers)
-    soup = BeautifulSoup(response.text, parser)
+    # Get current bus lines in Krakow
+    response = requests.get("http://rozklady.mpk.krakow.pl", headers=HEADERS)
+    soup = BeautifulSoup(response.text, PARSER)
 
     lines = soup.find_all('a', attrs={'class': ["linia", "liniaZ", "liniaO", "liniaN"]})
-    current_date = lines[0]["href"].split('&')[1].split('=')[1]
-
+    date = soup.find('label', attrs={'class': 'label_submit'}).findChildren()
+    current_date = date[0]["href"].split('&')[1].split('=')[1]
     progress_bar(0, len(lines))
 
-    main_link = "http://rozklady.mpk.krakow.pl/?lang=PL&rozklad={}&linia=".format(current_date)
+    main_link = f"http://rozklady.mpk.krakow.pl/?lang=PL&rozklad={current_date}&linia="
     timetable = {}
 
     for i, line in enumerate(lines):
 
         line = line.text.strip()
         # Get each bus line web-page
-        response = requests.get(main_link + "{}".format(line), headers=headers)
-        soup = BeautifulSoup(response.text, parser)
+        response = requests.get(main_link + "{}".format(line), headers=HEADERS)
+        soup = BeautifulSoup(response.text, PARSER)
         number_of_bus_routes = len(soup.find_all('table', attrs={'style': ' vertical-align: top; '})[0].find_all('a'))
 
         for route in range(1, number_of_bus_routes + 1):
 
             # For each bus route get it's web-page
-            response = requests.get(main_link + "{}__{}".format(line, route), headers=headers)
-            soup = BeautifulSoup(response.text, parser)
+            response = requests.get(main_link + f"{line}__{route}", headers=HEADERS)
+            soup = BeautifulSoup(response.text, PARSER)
 
             # Get first bus stop
-            first_link = soup.find('a', href=re.compile(re.escape(r"/?lang=PL&rozklad={}&linia={}__{}".format(current_date, line, route))))
+            a_href_parameter = r"/?lang=PL&rozklad={}&linia={}__{}".format(current_date, line, route)
+            first_link = soup.find('a', href=re.compile(re.escape(a_href_parameter)))
             first_stop = first_link.find('span').contents[0].strip()
 
             # Get next stops recursively
-            timetable["{}_{}".format(line, route)] = download_timetables(first_link, first_stop, current_date)
+            timetable[f"{line}_{route}"] = download_timetables(first_link,
+                                                               first_stop,
+                                                               current_date)
 
         progress_bar(i, len(lines))
 
@@ -242,6 +264,5 @@ def main():
         file.write(json.dumps(timetable))
 
 
-# Get current bus lines in Kraków
 if __name__ == "__main__":
     main()
